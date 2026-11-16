@@ -1,0 +1,213 @@
+name: CI
+
+# Tests, binaries and the container image on every push that changes code; documentation-only
+# pushes skip it. A `v…` tag also pushes the image and makes a GitHub release.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  IMAGE: ghcr.io/minifyx/uwuspamnet
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - run: cargo fmt --all --check
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo test --all-targets --locked
+
+  version:
+    name: Version
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - name: The tag matches Cargo.toml and CHANGELOG.md
+        run: |
+          cargo_version="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
+          test "$cargo_version" = "${GITHUB_REF_NAME#v}"
+          grep -qx "## ${GITHUB_REF_NAME#v}" CHANGELOG.md
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - run: cargo audit --version || cargo install cargo-audit --locked
+      - run: cargo audit
+
+  binaries:
+    name: Binaries
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          targets: x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu
+      - name: Cross compiler for arm64
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: release
+      - name: Build amd64
+        run: cargo build --release --locked --target x86_64-unknown-linux-gnu
+      - name: Build arm64
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+          CC_aarch64_unknown_linux_gnu: aarch64-linux-gnu-gcc
+          AR_aarch64_unknown_linux_gnu: aarch64-linux-gnu-ar
+        run: cargo build --release --locked --target aarch64-unknown-linux-gnu
+      - name: Collect them
+        run: |
+          mkdir -p dist/amd64 dist/arm64
+          cp target/x86_64-unknown-linux-gnu/release/uwuspamnet dist/amd64/
+          cp target/aarch64-unknown-linux-gnu/release/uwuspamnet dist/arm64/
+          dist/amd64/uwuspamnet --version
+          file dist/arm64/uwuspamnet | grep -q aarch64
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: binaries
+          path: dist
+          retention-days: 3
+
+  image:
+    name: Container image
+    if: github.event_name != 'pull_request'
+    needs: [binaries, audit]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: binaries
+          path: dist
+      - run: chmod +x dist/*/uwuspamnet
+      # No QEMU: the only stage that runs anything runs on the machine that builds.
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - name: Build for scanning
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: docker/Dockerfile.release
+          platforms: linux/amd64
+          load: true
+          tags: uwuspamnet:scan
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Install Trivy
+        env:
+          VERSION: "0.74.0"
+          SHA256: 2ae6fe3ee734b7fdf11335663e18c75ea12dccc76062f09f164a3b0f8be4371a
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/trivy.tar.gz" \
+            "https://github.com/aquasecurity/trivy/releases/download/v$VERSION/trivy_${VERSION}_Linux-64bit.tar.gz"
+          echo "$SHA256  $RUNNER_TEMP/trivy.tar.gz" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/trivy.tar.gz" -C "$RUNNER_TEMP" trivy
+      - name: Scan the image
+        run: |
+          "$RUNNER_TEMP/trivy" image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed \
+            --exit-code 1 --no-progress uwuspamnet:scan
+      - name: Smoke test
+        run: |
+          docker run -d --rm --name spamnet -p 127.0.0.1:8080:8080 -e SPAMNET_TRUST_FORWARDED=true \
+            uwuspamnet:scan
+          for _ in $(seq 1 30); do curl -sf localhost:8080/v1/health && break; sleep 1; done
+          keys=""
+          for net in 192.0.2.10 198.51.100.10 203.0.113.10; do
+            key=$(curl -sf -H "x-forwarded-for: $net" -H 'content-type: application/json' \
+              -d '{"name":"mail.example.com","software":"ci"}' localhost:8080/v1/register | jq -r .key)
+            keys="$keys $key"
+            curl -sf -H "authorization: Bearer $key" -H 'content-type: application/json' \
+              -d '{"reports":[{"verdict":"spam","reason":"user","domains":["spam.example.com"]}]}' \
+              localhost:8080/v1/reports
+          done
+          curl -sf -H "authorization: Bearer $key" localhost:8080/v1/list |
+            jq -e '.entries[] | select(.value == "spam.example.com")'
+          docker stop spamnet
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
+        if: startsWith(github.ref, 'refs/tags/v')
+        id: meta
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+      - name: Push the image
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: docker/Dockerfile.release
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  release:
+    name: GitHub release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [image, version]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - name: Publish with notes from CHANGELOG.md
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v h="## ${version}" '$0 == h { f = 1; next } f && /^## / { exit } f { print }' \
+            CHANGELOG.md > notes.md
+          test -s notes.md
+          flags=""
+          case "$GITHUB_REF_NAME" in *-*) flags="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" $flags --title "UwUSpamNet $version" \
+            --notes-file notes.md

@@ -1,0 +1,41 @@
+# UwUSpamNet
+#
+#   cp .env.example .env    (optional: every setting has a default)
+#   docker compose up -d
+#
+# Put a reverse proxy with TLS in front (e.g. Caddy: `reverse_proxy 127.0.0.1:8080`) and set
+# SPAMNET_TRUST_FORWARDED=true so the per-IP registration limit sees the real client.
+
+name: uwuspamnet
+
+services:
+  spamnet:
+    image: ghcr.io/minifyx/uwuspamnet:${SPAMNET_VERSION:-latest}
+    container_name: uwuspamnet
+    restart: unless-stopped
+    environment:
+      SPAMNET_TRUST_FORWARDED: ${SPAMNET_TRUST_FORWARDED:-false}
+      SPAMNET_REPORTS_PER_DAY: ${SPAMNET_REPORTS_PER_DAY:-5000}
+      SPAMNET_REGISTRATIONS_PER_IP: ${SPAMNET_REGISTRATIONS_PER_IP:-5}
+    ports:
+      - "${SPAMNET_BIND:-127.0.0.1:8080}:8080"
+    volumes:
+      - spamnet-data:/data
+    stop_grace_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # Unprivileged (uid 10001), read-only root, no capabilities: it listens above 1024 and
+    # writes only /data.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  spamnet-data:

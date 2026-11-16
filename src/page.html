@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>UwUSpamNet</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #fbf8fc;
+  --fg: #231d2b;
+  --muted: #5d5369;
+  --accent: #a3166a;
+  --line: #e4dbea;
+  background: var(--bg);
+  color: var(--fg);
+  font: 1rem/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #17141c; --fg: #ece6f2; --muted: #b6abc2; --accent: #f28cc4; --line: #322b3b; }
+}
+body { margin: 0; padding: 2rem 1rem 4rem; }
+main { max-width: 42rem; margin: 0 auto; }
+h1 { font-size: 2rem; margin: 0 0 .25rem; }
+h1 span { color: var(--accent); }
+h2 { font-size: 1.15rem; margin: 2rem 0 .5rem; }
+p, li { color: var(--fg); }
+.lead { color: var(--muted); margin-top: 0; }
+section + section { border-top: 1px solid var(--line); margin-top: 2.5rem; padding-top: 1rem; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .9em; }
+a { color: var(--accent); text-underline-offset: .15em; }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+nav { font-size: .9rem; margin-bottom: 1.5rem; }
+</style>
+</head>
+<body>
+<main>
+<nav><a href="#de">Deutsch</a> · <a href="#en" hreflang="en">English</a></nav>
+<h1>UwU<span>SpamNet</span></h1>
+<p class="lead">Mailserver teilen Spam-Merkmale. · Mail servers share spam signals.</p>
+
+<section id="de">
+<h2>Was ist das?</h2>
+<p>UwUSpamNet ist ein offener Dienst, über den Mailserver einander melden, was sie als Spam erkannt haben,
+und eine Liste dessen abrufen, was mindestens drei voneinander unabhängige Server gemeldet haben.
+Jede Mailserver-Software kann teilnehmen (nicht nur UwUMail); nötig ist eine Registrierung mit Schlüssel.
+Protokoll und Digest-Verfahren sind offen dokumentiert.</p>
+
+<h2>Was geteilt wird</h2>
+<ul>
+<li>Text-Fingerabdrücke (gekürzte SHA-256-Werte normalisierten Texts, nicht umkehrbar),</li>
+<li>registrierbare Domains aus Links und die Absender-Domain,</li>
+<li>die einliefernde IP-Adresse (IPv4 einzeln, IPv6 als /64-Netz),</li>
+<li>ob es Spam oder kein Spam war, und ob eine Person oder ein Filter das entschieden hat.</li>
+</ul>
+<p><strong>Nie geteilt:</strong> Mailinhalte, Betreffzeilen, Empfängeradressen, Namen, Anhänge, Wortlisten von Filtern.</p>
+
+<h2>Datenschutz</h2>
+<p>Gespeichert werden je teilnehmendem Server: Kennung, angegebener Name, Software, optional eine Kontaktadresse,
+ein Hash des Schlüssels, das Netz der Registrierung (IPv4 /24 bzw. IPv6 /48) und der Zeitpunkt.
+Meldungen werden je Merkmal und Server zusammengefasst (Zähler und letzte Zeit) und nach 14 Tagen gelöscht.
+IP-Adressen der meldenden Server werden nicht gespeichert; für die Begrenzung der Registrierungen
+werden sie nur im Arbeitsspeicher und höchstens einen Tag gezählt. Es gibt keine Cookies, keine Tracker
+und keine Inhalte von Dritten. Die Zugriffsprotokolle des vorgeschalteten Webservers werden kurz aufbewahrt.</p>
+<p>Wer Merkmale einliefernder Server meldet, ist selbst verantwortlich, seine Nutzer darüber zu informieren.</p>
+
+<h2>Mitmachen</h2>
+<p>Die Schnittstelle (<code>/v1/register</code>, <code>/v1/reports</code>, <code>/v1/list</code>) und das
+Digest-Verfahren stehen im Quellcode-Repository:
+<a href="https://github.com/MinifyX/UwUSpamNet">github.com/MinifyX/UwUSpamNet</a> (AGPL-3.0).
+Dort steht auch, wie man den Dienst selbst betreibt.</p>
+</section>
+
+<section id="en" lang="en">
+<h2>What is this?</h2>
+<p>UwUSpamNet is an open service through which mail servers tell each other what they recognised as spam,
+and fetch a list of what at least three independent servers reported. Any mail server software can take part
+(not only UwUMail); a registration with a key is required. The protocol and the digest algorithm are openly documented.</p>
+
+<h2>What is shared</h2>
+<ul>
+<li>text fingerprints (truncated SHA-256 of normalised text, not reversible),</li>
+<li>registrable domains from links, and the sender domain,</li>
+<li>the sending IP address (IPv4 as is, IPv6 as its /64 network),</li>
+<li>whether it was spam or not, and whether a person or a filter decided.</li>
+</ul>
+<p><strong>Never shared:</strong> message contents, subjects, recipient addresses, names, attachments, filter word lists.</p>
+
+<h2>Privacy</h2>
+<p>For each participating server we store: an id, the name and software it gave, optionally a contact address,
+a hash of its key, the network it registered from (IPv4 /24 or IPv6 /48) and when. Reports are aggregated per
+signal and server (counters and last time) and deleted after 14 days. IP addresses of reporting servers are not
+stored; for limiting registrations they are counted in memory only, for at most a day. No cookies, no trackers,
+no third-party content. The access logs of the reverse proxy in front are kept briefly.</p>
+<p>Whoever reports signals of sending servers is responsible for telling their own users.</p>
+
+<h2>Taking part</h2>
+<p>The API (<code>/v1/register</code>, <code>/v1/reports</code>, <code>/v1/list</code>) and the digest algorithm
+are in the source repository: <a href="https://github.com/MinifyX/UwUSpamNet">github.com/MinifyX/UwUSpamNet</a>
+(AGPL-3.0), together with how to run the service yourself.</p>
+</section>
+</main>
+</body>
+</html>

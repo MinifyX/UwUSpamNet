@@ -1,0 +1,46 @@
+[package]
+name = "uwuspamnet"
+description = "Shared spam signals for mail servers: text digests, link domains, sending IPs and sender domains"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+repository = "https://github.com/MinifyX/UwUSpamNet"
+rust-version = "1.89"
+
+[lib]
+name = "uwuspamnet"
+path = "src/lib.rs"
+
+[[bin]]
+name = "uwuspamnet"
+path = "src/main.rs"
+
+[dependencies]
+axum = { version = "0.8", default-features = false, features = ["http1", "json", "query", "tokio"] }
+clap = { version = "4", features = ["derive", "env"] }
+rand = "0.8"
+# Bundled SQLite, so the service never depends on whichever libsqlite3 is around.
+rusqlite = { version = "0.41", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "net"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# NFKC for Digest v1.
+unicode-normalization = "0.1"
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

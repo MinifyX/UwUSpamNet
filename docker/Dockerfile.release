@@ -1,0 +1,24 @@
+# syntax=docker/dockerfile:1.7
+#
+# Packages the binaries CI built before: dist/amd64/uwuspamnet and dist/arm64/uwuspamnet.
+# docker/Dockerfile builds the same image from source.
+
+# Runs on the building machine whatever the target: it only copies and sets modes.
+FROM --platform=$BUILDPLATFORM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS prep
+ARG TARGETARCH
+COPY dist/${TARGETARCH}/uwuspamnet /usr/local/bin/uwuspamnet
+RUN chmod 755 /usr/local/bin/uwuspamnet && install -d -o 10001 -g 10001 /data
+
+FROM gcr.io/distroless/cc-debian13@sha256:e1f5543d45a2cd7c02a5b43dda5f0ff30729b4832113759d01ed39b0b152cddb
+COPY --from=prep /usr/local/bin/ /usr/local/bin/
+COPY --from=prep --chown=10001:10001 /data /data
+USER 10001:10001
+ENV SPAMNET_DATA=/data \
+    SPAMNET_LISTEN=0.0.0.0:8080 \
+    HOME=/data
+VOLUME /data
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --start-interval=2s --retries=3 \
+    CMD ["/usr/local/bin/uwuspamnet", "health"]
+ENTRYPOINT ["/usr/local/bin/uwuspamnet"]
+CMD ["serve"]
