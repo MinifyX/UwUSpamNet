@@ -1,6 +1,6 @@
 # UwUSpamNet protocol v1
 
-HTTPS and JSON. Production: `https://spamnet.uwu.minifyx.de`. Every request and response body is
+HTTPS and JSON. Production: `https://spamnet.minifyx.de`. Every request and response body is
 UTF-8 JSON (`content-type: application/json`), except `GET /`, which is an HTML page.
 
 ## Authentication

@@ -5,7 +5,7 @@ Please report vulnerabilities privately through GitHub's
 public issue. You get an answer within a week.
 
 In scope: the service in this repository, its container image and the public instance at
-`spamnet.uwu.minifyx.de`. Of special interest: ways to get a value listed without three
+`spamnet.minifyx.de`. Of special interest: ways to get a value listed without three
 independent registration networks, ways to keep a value off the list, ways to read anything a
 server sent beyond the published list, and ways to exhaust the service.
 

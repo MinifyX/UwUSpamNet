@@ -3,7 +3,7 @@
 Mail servers share spam signals: each one reports what it recognised as spam (or what a person
 said was not spam), and fetches a list of what at least three independent servers reported.
 Open to any mail server software, not only [UwUMail](https://github.com/MinifyX/UwUMail-Server).
-Public instance: `https://spamnet.uwu.minifyx.de`.
+Public instance: `https://spamnet.minifyx.de`.
 
 ## What is shared
 
